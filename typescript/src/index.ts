@@ -1,5 +1,4 @@
-import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { URL } from 'url';
+import express from 'express';
 
 interface Queue {
   topic: string[];
@@ -16,7 +15,7 @@ class Broker {
 
   publish(topic: string, data: any) {
     const segments = this.parseTopic(topic);
-    for (const [_, queue] of this.queues) {
+    for (const [, queue] of this.queues) {
       if (this.topicMatches(queue.topic, segments)) {
         queue.messages.push({ topic, data });
       }
@@ -45,55 +44,40 @@ class Broker {
 }
 
 const broker = new Broker();
+const app = express();
+app.use(express.json());
 
-function readBody(req: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', (chunk: any) => { data += chunk; });
-    req.on('end', () => {
-      try {
-        resolve(JSON.parse(data || '{}'));
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on('error', reject);
-  });
-}
-
-const server = createServer(async (req: any, res: any) => {
-  const url = new URL(req.url || '', `http://${req.headers.host}`);
-  try {
-    if (req.method === 'POST' && url.pathname === '/publish') {
-      const body = await readBody(req);
-      if (!body.topic) throw new Error('Missing topic');
-      broker.publish(body.topic, body.data);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok' }));
-    } else if (req.method === 'POST' && url.pathname === '/attachQueue') {
-      const body = await readBody(req);
-      if (!body.queueId || !body.topic) throw new Error('Missing parameters');
-      broker.attachQueue(body.queueId, body.topic);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok' }));
-    } else if (req.method === 'GET' && url.pathname === '/get') {
-      const queueId = url.searchParams.get('queueId');
-      if (!queueId) throw new Error('Missing queueId');
-      const messages = broker.getMessages(queueId);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ messages }));
-    } else {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not found');
-    }
-  } catch (err: any) {
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: err.message }));
+app.post('/publish', (req: any, res: any) => {
+  const { topic, data } = req.body || {};
+  if (!topic) {
+    res.status(400).json({ error: 'Missing topic' });
+    return;
   }
+  broker.publish(topic, data);
+  res.json({ status: 'ok' });
+});
+
+app.post('/attachQueue', (req: any, res: any) => {
+  const { queueId, topic } = req.body || {};
+  if (!queueId || !topic) {
+    res.status(400).json({ error: 'Missing parameters' });
+    return;
+  }
+  broker.attachQueue(queueId, topic);
+  res.json({ status: 'ok' });
+});
+
+app.get('/get', (req: any, res: any) => {
+  const queueId = req.query.queueId as string;
+  if (!queueId) {
+    res.status(400).json({ error: 'Missing queueId' });
+    return;
+  }
+  const messages = broker.getMessages(queueId);
+  res.json({ messages });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`Broker server running on port ${PORT}`);
 });
-
