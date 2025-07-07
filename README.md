@@ -30,7 +30,7 @@ npm start
 ### Rust
 
 ```sh
-cargo run --manifest-path rust/Cargo.toml
+cargo run --release --manifest-path rust/Cargo.toml
 ```
 
 ### Go

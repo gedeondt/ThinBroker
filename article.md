@@ -22,7 +22,7 @@ npm start
 
 ```bash
 # Rust
-cargo run --manifest-path rust/Cargo.toml
+cargo run --release --manifest-path rust/Cargo.toml
 ```
 
 ```bash
