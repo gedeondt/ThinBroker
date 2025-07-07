@@ -7,7 +7,7 @@ This folder contains a minimal message broker implemented in Rust using the `act
 Build and start the server with:
 
 ```sh
-cargo run --manifest-path rust/Cargo.toml
+cargo run --release --manifest-path rust/Cargo.toml
 ```
 
 ## API
