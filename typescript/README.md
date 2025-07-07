@@ -1,6 +1,6 @@
 # TypeScript Broker Example
 
-This folder contains a minimal message broker implemented in TypeScript using only the Node.js standard library.
+This folder contains a minimal message broker implemented in TypeScript using the Express framework.
 
 ## Scripts
 
@@ -32,4 +32,3 @@ Registers a queue to receive messages from a topic.
 ### GET /get?queueId=myQueue
 
 Retrieves and clears messages for the specified queue.
-
