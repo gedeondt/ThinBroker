@@ -2,7 +2,7 @@ use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Clone, Serialize)]
 struct Message {
@@ -10,41 +10,41 @@ struct Message {
     data: serde_json::Value,
 }
 
-#[derive(Clone)]
 struct Queue {
     topic: Vec<String>,
-    messages: Vec<Message>,
+    messages: Mutex<Vec<Message>>,
 }
 
 struct Broker {
-    queues: Mutex<HashMap<String, Queue>>,
+    queues: RwLock<HashMap<String, Arc<Queue>>>,
 }
 
 impl Broker {
     fn new() -> Self {
         Broker {
-            queues: Mutex::new(HashMap::new()),
+            queues: RwLock::new(HashMap::new()),
         }
     }
 
     fn attach_queue(&self, id: String, topic: String) {
         let segments = Self::parse_topic(&topic);
-        let mut qs = self.queues.lock().unwrap();
+        let mut qs = self.queues.write().unwrap();
         qs.insert(
             id,
-            Queue {
+            Arc::new(Queue {
                 topic: segments,
-                messages: Vec::new(),
-            },
+                messages: Mutex::new(Vec::new()),
+            }),
         );
     }
 
     fn publish(&self, topic: &str, data: serde_json::Value) {
         let segments = Self::parse_topic(topic);
-        let mut qs = self.queues.lock().unwrap();
-        for queue in qs.values_mut() {
+        let qs = self.queues.read().unwrap();
+        for queue in qs.values() {
             if Self::topic_matches(&queue.topic, &segments) {
-                queue.messages.push(Message {
+                let mut msgs = queue.messages.lock().unwrap();
+                msgs.push(Message {
                     topic: topic.to_string(),
                     data: data.clone(),
                 });
@@ -53,10 +53,11 @@ impl Broker {
     }
 
     fn get_messages(&self, id: &str) -> Vec<Message> {
-        let mut qs = self.queues.lock().unwrap();
-        if let Some(queue) = qs.get_mut(id) {
-            let msgs = queue.messages.clone();
-            queue.messages.clear();
+        let qs = self.queues.read().unwrap();
+        if let Some(queue) = qs.get(id) {
+            let mut msgs_lock = queue.messages.lock().unwrap();
+            let msgs = msgs_lock.clone();
+            msgs_lock.clear();
             msgs
         } else {
             Vec::new()
