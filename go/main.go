@@ -14,13 +14,14 @@ type Message struct {
 }
 
 type Queue struct {
-	Topic    []string
-	Messages []Message
+        Topic    []string
+        mu       sync.Mutex
+        Messages []Message
 }
 
 type Broker struct {
-	mu     sync.Mutex
-	Queues map[string]*Queue
+        mu     sync.RWMutex
+        Queues map[string]*Queue
 }
 
 func NewBroker() *Broker {
@@ -28,33 +29,41 @@ func NewBroker() *Broker {
 }
 
 func (b *Broker) AttachQueue(id, topic string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	segs := parseTopic(topic)
-	b.Queues[id] = &Queue{Topic: segs}
+        b.mu.Lock()
+        defer b.mu.Unlock()
+        segs := parseTopic(topic)
+        b.Queues[id] = &Queue{Topic: segs}
 }
 
 func (b *Broker) Publish(topic string, data json.RawMessage) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	segs := parseTopic(topic)
-	for _, q := range b.Queues {
-		if topicMatches(q.Topic, segs) {
-			q.Messages = append(q.Messages, Message{Topic: topic, Data: data})
-		}
-	}
+        segs := parseTopic(topic)
+        b.mu.RLock()
+        qs := make([]*Queue, 0, len(b.Queues))
+        for _, q := range b.Queues {
+                if topicMatches(q.Topic, segs) {
+                        qs = append(qs, q)
+                }
+        }
+        b.mu.RUnlock()
+        for _, q := range qs {
+                q.mu.Lock()
+                q.Messages = append(q.Messages, Message{Topic: topic, Data: data})
+                q.mu.Unlock()
+        }
 }
 
 func (b *Broker) GetMessages(id string) []Message {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	q, ok := b.Queues[id]
-	if !ok {
-		return nil
-	}
-	msgs := append([]Message(nil), q.Messages...)
-	q.Messages = nil
-	return msgs
+        b.mu.RLock()
+        q, ok := b.Queues[id]
+        b.mu.RUnlock()
+        if !ok {
+                return nil
+        }
+        q.mu.Lock()
+        msgs := append([]Message(nil), q.Messages...)
+        q.Messages = nil
+        q.mu.Unlock()
+        return msgs
 }
 
 func parseTopic(topic string) []string {
