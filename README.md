@@ -16,7 +16,7 @@ The `rust` directory contains the same broker implemented in Rust.  Build and ru
 cargo run --manifest-path rust/Cargo.toml
 ```
 
-A simple load tester is provided in the `broker_tester` directory.  It is a Rust command line program that sends messages to the broker using multiple threads and reports latency percentiles.
+A simple load tester is provided in the `broker_tester` directory.  It is a Rust command line program that first runs a basic functionality check on topics and message contents and then sends messages using multiple threads to report latency percentiles.
 
 Run it with:
 
